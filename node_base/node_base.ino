@@ -59,11 +59,11 @@ void loop(void)
     
     //Messages Received
     if(header.from_node == 3){
-      p("%010ld ID: %05d - From %03d - To: %03d",millis(),header.id,header.from_node, header.to_node);
+      p("%010ld: ID: %05d - From %03d - To: %03d",millis(),header.id,header.from_node, header.to_node);
       Serial.print(" - Temperature: ");Serial.println(header.temp);
     }
     else {
-    p("%010ld ID: %05d - From %03d - To: %03d\n",millis(),header.id,header.from_node, header.to_node);
+    p("%010ld: ID: %05d - From %03d - To: %03d\n",millis(),header.id,header.from_node, header.to_node);
     }
     
     //Handle Receibed and Answer Them
