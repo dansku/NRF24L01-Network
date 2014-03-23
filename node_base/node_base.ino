@@ -34,10 +34,6 @@ void p(char *fmt, ... );
 
 void setup(void)
 {
-  pinMode(A1, OUTPUT); // GND for the NRF24 module
-  digitalWrite(A1, LOW); // GND for the NRF24 module
-  pinMode(7, OUTPUT); // VCC for the NRF24 module
-  digitalWrite(7,HIGH); // Power up the NRF24 module
   Serial.begin(115200);
   delay(128);
   SPI.begin();
@@ -60,7 +56,8 @@ void loop(void)
     //Messages Received
     if(header.from_node == 3){
       p("%010ld: ID: %05d - From %03d - To: %03d",millis(),header.id,header.from_node, header.to_node);
-      Serial.print(" - Temperature: ");Serial.println(header.temp);
+      Serial.print(" - Temperature: ");Serial.print(header.temperature);
+      Serial.print(" - Humidity: ");Serial.println(header.humidity);
     }
     else {
     p("%010ld: ID: %05d - From %03d - To: %03d\n",millis(),header.id,header.from_node, header.to_node);
@@ -68,7 +65,11 @@ void loop(void)
     
     //Handle Receibed and Answer Them
     handle_T(header);
-   
+    
+//    if(digitalRead(2)==HIGH){
+//      handle_DO(header,3,"O");
+//    }
+//   
 
     };
   
@@ -85,17 +86,39 @@ void loop(void)
   }   
 }
 
+void handle_DO(RF24NetworkHeader& header, int to_node, char *){
+  unsigned long time;
+    RF24NetworkHeader header2(to_node, 'M'); //Here we can send O (On) F (Off)
+    if(network.write(header2,&time,sizeof(time)))
+      p("%010ld: Sending MSG to\n", millis(),header.from_node);
+
+}
+
 void handle_T(RF24NetworkHeader& header)
 {
   unsigned long time;
   network.read(header,&time,sizeof(time));
   //p("%010ld: Recv 'T' from %05o:%010ld\n", millis(), header.from_node, time);
   add_node(header.from_node);  
-  if(header.from_node != this_node)
-  {
-    RF24NetworkHeader header2(header.from_node/*header.from_node*/,'B');
-    if(network.write(header2,&time,sizeof(time)))
+  if(header.from_node != this_node){
+    if(header.from_node == 3){
+      if(digitalRead(2)==HIGH){
+        RF24NetworkHeader header2(header.from_node/*header.from_node*/,'O');
+        if(network.write(header2,&time,sizeof(time)))
+         p("%010ld: Answering 'B' to %05o, confirming message received!\n", millis(),header.from_node);
+      }
+      else{
+        RF24NetworkHeader header2(header.from_node/*header.from_node*/,'F');
+        if(network.write(header2,&time,sizeof(time)))
+        p("%010ld: Answering 'B' to %05o, confirming message received!\n", millis(),header.from_node);
+      }
+
+    }
+    else{
+      RF24NetworkHeader header2(header.from_node/*header.from_node*/,'B');
+      if(network.write(header2,&time,sizeof(time)))
       p("%010ld: Answering 'B' to %05o, confirming message received!\n", millis(),header.from_node);
+    }
   }
 }
 

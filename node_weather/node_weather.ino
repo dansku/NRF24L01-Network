@@ -112,11 +112,14 @@ void loop(void){
  */
 boolean send_T(uint16_t to) // Send out this nodes' time -> Timesync!
 {
+   RF24NetworkHeader header(to,'OK');
   float h = dht.readHumidity();
   float t = dht.readTemperature();
-  p("%010ld: Sent 'T' to   %05o", millis(),to);
-  RF24NetworkHeader header(to,'OK');
-  header.temp = t;
+  header.temperature = t;
+  header.humidity = h;
+  
+  p("%010ld: Sent Temperature Humidity  %05o", millis(),to);
+ 
   unsigned long time = micros();
   return network.write(header,&time,sizeof(time));
 }
@@ -154,10 +157,13 @@ unsigned long microsRollover() { //based on Rob Faludi's (rob.faludi.com) milli 
   return microRollovers;
 }
 
-void handle_B(RF24NetworkHeader& header)
-{
+void handle_B(RF24NetworkHeader& header){
   p_recv++;
   unsigned long ref_time;
   network.read(header,&ref_time,sizeof(ref_time));
-  p("%010ld: Recv 'B' from %05o -> %ldus round trip\n", millis(), header.from_node, micros()-ref_time);
+  //p("%010ld: Received 'B' from %05o -> %ldus round trip\n", millis(), header.from_node, micros()-ref_time);
+  Serial.print("Recebi ");
+  Serial.println(header.type);
+  if(header.type == 79){ digitalWrite(4,HIGH); }
+  else{digitalWrite(4,LOW);}
 }
