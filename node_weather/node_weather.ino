@@ -1,8 +1,10 @@
-
+#include <DHT.h>
 #include <RF24Network.h>
 #include <RF24.h>
 #include <SPI.h>
 #include <stdarg.h>
+
+DHT dht(2, DHT22);
 
 RF24 radio(9,10); // CE, CS. CE at pin A0, CSN at pin 8
 RF24Network network(radio);
@@ -32,9 +34,8 @@ void handle_T(RF24NetworkHeader& header);
 void handle_B(RF24NetworkHeader& header);
 void p(char *fmt, ... );
 
-void setup(void)
-{
-
+void setup(void){
+  dht.begin();
   Serial.begin(115200);
   delay(128);
   SPI.begin();
@@ -46,27 +47,31 @@ void setup(void)
   network.begin(/*fixed radio channel: */ 16, /*node address: */ this_node );
   Serial.print("This_node [DEC:");Serial.print(this_node,DEC);Serial.print("/OCT:");Serial.print(this_node,OCT);Serial.println("]");
   p("%010ld: Starting up\n", millis());
+  
+  pinMode(4,OUTPUT);
 }
 
 
 
-void loop(void)
-{
+void loop(void){
   network.update();
   updates++;
   
+  while ( network.available() ){
+    
+    RF24NetworkHeader header;
+    network.peek(header); // preview the header, but don't advance nor flush the packet
+    
+    handle_B(header);
+  
+    unsigned long time;
+    network.read(header,&time,sizeof(time));
+ }
   
   unsigned long now = millis();
   unsigned long nowM = micros();
   if ( now - last_time_sent >= interval ) // non-blocking
   {
-/*
-    Serial.print(microsRollover()); // how many times has the unsigned long micros() wrapped?
-    Serial.print(":"); //separator 
-    Serial.print(nowM); //micros();
-    Serial.print("\n"); //new line
-  */  
-    //p("%010ld: %ld estimated updates/s\n",millis(),updates*1000/interval);
     updates = 0;
     last_time_sent = now;
     uint16_t to = 00;
@@ -104,18 +109,17 @@ void loop(void)
 /*
  * T send own time
  * B send back the just received time
- * P send ping // not yet implemented
  */
 boolean send_T(uint16_t to) // Send out this nodes' time -> Timesync!
 {
+  float h = dht.readHumidity();
+  float t = dht.readTemperature();
   p("%010ld: Sent 'T' to   %05o", millis(),to);
-  RF24NetworkHeader header(to,'T');
-  header.temp = 18;
+  RF24NetworkHeader header(to,'OK');
+  header.temp = t;
   unsigned long time = micros();
   return network.write(header,&time,sizeof(time));
 }
-
-
 
 // Arduino version of the printf()-funcition in C 
 void p(char *fmt, ... ){
@@ -125,18 +129,6 @@ void p(char *fmt, ... ){
   vsnprintf(tmp, 128, fmt, args);
   va_end (args);
   Serial.print(tmp);
-}
-
-void add_node(uint16_t node)
-{
-  short i = num_active_nodes;
-  while (i--)
-    if ( active_nodes[i] == node ) break; // Do we already know about this node?
-  if ( i == -1 && num_active_nodes < max_active_nodes )  // If not and there is enough place, add it to the table
-  {
-    active_nodes[num_active_nodes++] = node; 
-    p("%010ld: Add new node: %05o\n", millis(), node);
-  }
 }
 
 unsigned long microsRollover() { //based on Rob Faludi's (rob.faludi.com) milli wrapper
@@ -160,4 +152,12 @@ unsigned long microsRollover() { //based on Rob Faludi's (rob.faludi.com) milli 
     readyToRoll = false; // we're no longer past halfway, reset!
   } 
   return microRollovers;
+}
+
+void handle_B(RF24NetworkHeader& header)
+{
+  p_recv++;
+  unsigned long ref_time;
+  network.read(header,&ref_time,sizeof(ref_time));
+  p("%010ld: Recv 'B' from %05o -> %ldus round trip\n", millis(), header.from_node, micros()-ref_time);
 }
