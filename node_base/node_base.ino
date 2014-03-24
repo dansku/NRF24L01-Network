@@ -54,13 +54,13 @@ void loop(void)
     network.peek(header); // preview the header, but don't advance nor flush the packet
     
     //Messages Received
-    if(header.from_node == 3){
-      p("%010ld: ID: %05d - From %03d - To: %03d",millis(),header.id,header.from_node, header.to_node);
+    if(header.kind == 1){
+      p("%010ld: ID: %05d - From %05d - To: %05d",millis(),header.id,header.from_node, header.to_node);
       Serial.print(" - Temperature: ");Serial.print(header.temperature);
       Serial.print(" - Humidity: ");Serial.println(header.humidity);
     }
     else {
-    p("%010ld: ID: %05d - From %03d - To: %03d\n",millis(),header.id,header.from_node, header.to_node);
+    p("%010ld: ID: %05d - From %05d - To: %05d\n",millis(),header.id,header.from_node, header.to_node);
     }
     
     //Handle Receibed and Answer Them
@@ -94,14 +94,13 @@ void handle_DO(RF24NetworkHeader& header, int to_node, char *){
 
 }
 
-void handle_T(RF24NetworkHeader& header)
-{
+void handle_T(RF24NetworkHeader& header){
   unsigned long time;
   network.read(header,&time,sizeof(time));
   //p("%010ld: Recv 'T' from %05o:%010ld\n", millis(), header.from_node, time);
   add_node(header.from_node);  
   if(header.from_node != this_node){
-    if(header.from_node == 3){
+    if(header.kind == 1){
       if(digitalRead(2)==HIGH){
         RF24NetworkHeader header2(header.from_node/*header.from_node*/,'O');
         if(network.write(header2,&time,sizeof(time)))
