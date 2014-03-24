@@ -36,6 +36,7 @@ void p(char *fmt, ... );
 
 void setup(void)
 {
+ dht.begin();
   Serial.begin(115200);
   delay(128);
   SPI.begin();
@@ -43,7 +44,7 @@ void setup(void)
   // The amplifier gain can be set to RF24_PA_MIN=-18dBm, RF24_PA_LOW=-12dBm, RF24_PA_MED=-6dBM, and RF24_PA_HIGH=0dBm.
   radio.setPALevel(RF24_PA_LOW); // transmitter gain value (see above)
   network.begin(/*fixed radio channel: */ 16, /*node address: */ this_node );
- Serial.print("This_node [DEC:");Serial.print(this_node,DEC);Serial.print("/OCT:");Serial.print(this_node,OCT);Serial.println("]");
+  Serial.print("This_node [DEC:");Serial.print(this_node,DEC);Serial.print("/OCT:");Serial.print(this_node,OCT);Serial.println("]");
   p("%010ld: Starting up\n", millis());
   
   pinMode(4,OUTPUT);
@@ -57,19 +58,13 @@ void loop(void)
   {
     RF24NetworkHeader header;
     network.peek(header); // preview the header, but don't advance nor flush the packet
-    switch (header.type)
-    {
-    case 'T':
-      handle_T(header);
-      break;
-    case 'B':
-      handle_B(header);
-      break;      
-    default:
-      network.read(header,0,0);
-      p("            undefined packet type?\n");
-      break;
-    };
+    
+
+    //Send Answers
+    handle_B(header);
+    // Fix To Have Its readings
+    unsigned long time;
+    network.read(header,&time,sizeof(time));
   }
   
   unsigned long now = millis();
@@ -126,11 +121,12 @@ boolean send_T(uint16_t to) // Send out this nodes' time -> Timesync!
 {
   p("%010ld: Sent 'T' to   %05o", millis(),to);
   RF24NetworkHeader header(to,'T');
-  float h = dht.readHumidity();
+    float h = dht.readHumidity();
   float t = dht.readTemperature();
   header.temperature = t;
   header.humidity = h;
   header.module = 1; // This is a weather station
+  p("%010ld: Sent Temperature Humidity  %05o", millis(),to);
   unsigned long time = micros();
   return network.write(header,&time,sizeof(time));
 }
@@ -155,6 +151,10 @@ void handle_B(RF24NetworkHeader& header)
   unsigned long ref_time;
   network.read(header,&ref_time,sizeof(ref_time));
   p("%010ld: Recv 'B' from %05o -> %ldus round trip\n", millis(), header.from_node, micros()-ref_time);
+  Serial.print("Recebi ");
+  Serial.println(header.type);
+  if(header.type == 79){ digitalWrite(4,HIGH); }
+  else{digitalWrite(4,LOW);}
 }
 
 // Arduino version of the printf()-funcition in C 
