@@ -42,7 +42,8 @@ void setup(void)
   SPI.begin();
   radio.begin();
   // The amplifier gain can be set to RF24_PA_MIN=-18dBm, RF24_PA_LOW=-12dBm, RF24_PA_MED=-6dBM, and RF24_PA_HIGH=0dBm.
-  radio.setPALevel(RF24_PA_LOW); // transmitter gain value (see above)
+  radio.setPALevel(RF24_PA_HIGH); // transmitter gain value (see above)
+  radio.setDataRate(RF24_250KBPS);
   network.begin(/*fixed radio channel: */ 16, /*node address: */ this_node );
   Serial.print("This_node [DEC:");Serial.print(this_node,DEC);Serial.print("/OCT:");Serial.print(this_node,OCT);Serial.println("]");
   p("%010ld: Starting up\n", millis());

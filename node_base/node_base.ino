@@ -39,7 +39,8 @@ void setup(void)
   SPI.begin();
   radio.begin();
   // The amplifier gain can be set to RF24_PA_MIN=-18dBm, RF24_PA_LOW=-12dBm, RF24_PA_MED=-6dBM, and RF24_PA_HIGH=0dBm.
-  radio.setPALevel(RF24_PA_LOW); // transmitter gain value (see above)
+  radio.setPALevel(RF24_PA_MIN); // transmitter gain value (see above)
+  radio.setDataRate(RF24_250KBPS);
   network.begin(/*fixed radio channel: */ 16, /*node address: */ this_node );
   p("%010ld: Starting up... We are Node %05d \n", millis(),this_node);
 }
@@ -52,15 +53,15 @@ void loop(void)
   {
     RF24NetworkHeader header;
     network.peek(header); // preview the header, but don't advance nor flush the packet
-    
+    Serial.print("Kind: ");Serial.println(header.module);
     //Messages Received
-    if(header.kind == 1){
-      p("%010ld: ID: %05d - From %05d - To: %05d",millis(),header.id,header.from_node, header.to_node);
+    if(header.module == 1){
+      p("%010ld: ID: %05d - From %05o - To: %05o",millis(),header.id,header.from_node, header.to_node);
       Serial.print(" - Temperature: ");Serial.print(header.temperature);
       Serial.print(" - Humidity: ");Serial.println(header.humidity);
     }
     else {
-    p("%010ld: ID: %05d - From %05d - To: %05d\n",millis(),header.id,header.from_node, header.to_node);
+    p("%010ld: ID: %05d - From %05o - To: %05o\n",millis(),header.id,header.from_node, header.to_node);
     }
     
     //Handle Receibed and Answer Them
@@ -100,16 +101,16 @@ void handle_T(RF24NetworkHeader& header){
   //p("%010ld: Recv 'T' from %05o:%010ld\n", millis(), header.from_node, time);
   add_node(header.from_node);  
   if(header.from_node != this_node){
-    if(header.kind == 1){
+    if(header.module == 1){
       if(digitalRead(2)==HIGH){
         RF24NetworkHeader header2(header.from_node/*header.from_node*/,'O');
         if(network.write(header2,&time,sizeof(time)))
-         p("%010ld: Answering 'B' to %05o, confirming message received!\n", millis(),header.from_node);
+         p("%010ld: Answering 'B' to %05o, confirming message received TURN LIGHT ON!\n", millis(),header.from_node);
       }
       else{
         RF24NetworkHeader header2(header.from_node/*header.from_node*/,'F');
         if(network.write(header2,&time,sizeof(time)))
-        p("%010ld: Answering 'B' to %05o, confirming message received!\n", millis(),header.from_node);
+        p("%010ld: Answering 'B' to %05o, confirming message received!TURN LIGHT OFF \n", millis(),header.from_node);
       }
 
     }
