@@ -9,7 +9,7 @@ DHT dht(2, DHT22);
 RF24 radio(9,10); // CE, CS. CE at pin A0, CSN at pin 8
 RF24Network network(radio);
 
-static uint16_t this_node = 3; // 001
+static uint16_t this_node = 012; // 001
 short node_prime = 79; // 83, 89, 97
 unsigned long iterations=0;
 unsigned long errors=0;
@@ -34,44 +34,55 @@ void handle_T(RF24NetworkHeader& header);
 void handle_B(RF24NetworkHeader& header);
 void p(char *fmt, ... );
 
-void setup(void){
-  dht.begin();
+void setup(void)
+{
   Serial.begin(115200);
   delay(128);
   SPI.begin();
   radio.begin();
-  //Slower, better distance
-   radio.setDataRate(RF24_250KBPS);
   // The amplifier gain can be set to RF24_PA_MIN=-18dBm, RF24_PA_LOW=-12dBm, RF24_PA_MED=-6dBM, and RF24_PA_HIGH=0dBm.
   radio.setPALevel(RF24_PA_LOW); // transmitter gain value (see above)
   network.begin(/*fixed radio channel: */ 16, /*node address: */ this_node );
-  Serial.print("This_node [DEC:");Serial.print(this_node,DEC);Serial.print("/OCT:");Serial.print(this_node,OCT);Serial.println("]");
+ Serial.print("This_node [DEC:");Serial.print(this_node,DEC);Serial.print("/OCT:");Serial.print(this_node,OCT);Serial.println("]");
   p("%010ld: Starting up\n", millis());
   
   pinMode(4,OUTPUT);
 }
 
-
-
-void loop(void){
+void loop(void)
+{
   network.update();
   updates++;
-  
-  while ( network.available() ){
-    
+  while ( network.available() ) // while there is some shit filling our pipe
+  {
     RF24NetworkHeader header;
     network.peek(header); // preview the header, but don't advance nor flush the packet
-    
-    handle_B(header);
-  
-    unsigned long time;
-    network.read(header,&time,sizeof(time));
- }
+    switch (header.type)
+    {
+    case 'T':
+      handle_T(header);
+      break;
+    case 'B':
+      handle_B(header);
+      break;      
+    default:
+      network.read(header,0,0);
+      p("            undefined packet type?\n");
+      break;
+    };
+  }
   
   unsigned long now = millis();
   unsigned long nowM = micros();
   if ( now - last_time_sent >= interval ) // non-blocking
   {
+/*
+    Serial.print(microsRollover()); // how many times has the unsigned long micros() wrapped?
+    Serial.print(":"); //separator 
+    Serial.print(nowM); //micros();
+    Serial.print("\n"); //new line
+  */  
+    p("%010ld: %ld estimated updates/s\n",millis(),updates*1000/interval);
     updates = 0;
     last_time_sent = now;
     uint16_t to = 00;
@@ -109,19 +120,41 @@ void loop(void){
 /*
  * T send own time
  * B send back the just received time
+ * P send ping // not yet implemented
  */
 boolean send_T(uint16_t to) // Send out this nodes' time -> Timesync!
 {
-   RF24NetworkHeader header(to,'OK');
+  p("%010ld: Sent 'T' to   %05o", millis(),to);
+  RF24NetworkHeader header(to,'T');
   float h = dht.readHumidity();
   float t = dht.readTemperature();
   header.temperature = t;
   header.humidity = h;
-  
-  p("%010ld: Sent Temperature Humidity  %05o", millis(),to);
- 
+  header.module = 1; // This is a weather station
   unsigned long time = micros();
   return network.write(header,&time,sizeof(time));
+}
+
+void handle_T(RF24NetworkHeader& header)
+{
+  unsigned long time;
+  network.read(header,&time,sizeof(time));
+  p("%010ld: Recv 'T' from %05o:%010ld\n", millis(), header.from_node, time);
+  add_node(header.from_node);  
+  if(header.from_node != this_node)
+  {
+    RF24NetworkHeader header2(header.from_node/*header.from_node*/,'B');
+    if(network.write(header2,&time,sizeof(time)))
+      p("%010ld: Answ 'B' to   %05o\n", millis(),header.from_node);
+  }
+}
+
+void handle_B(RF24NetworkHeader& header)
+{
+  p_recv++;
+  unsigned long ref_time;
+  network.read(header,&ref_time,sizeof(ref_time));
+  p("%010ld: Recv 'B' from %05o -> %ldus round trip\n", millis(), header.from_node, micros()-ref_time);
 }
 
 // Arduino version of the printf()-funcition in C 
@@ -132,6 +165,18 @@ void p(char *fmt, ... ){
   vsnprintf(tmp, 128, fmt, args);
   va_end (args);
   Serial.print(tmp);
+}
+
+void add_node(uint16_t node)
+{
+  short i = num_active_nodes;
+  while (i--)
+    if ( active_nodes[i] == node ) break; // Do we already know about this node?
+  if ( i == -1 && num_active_nodes < max_active_nodes )  // If not and there is enough place, add it to the table
+  {
+    active_nodes[num_active_nodes++] = node; 
+    p("%010ld: Add new node: %05o\n", millis(), node);
+  }
 }
 
 unsigned long microsRollover() { //based on Rob Faludi's (rob.faludi.com) milli wrapper
@@ -155,15 +200,4 @@ unsigned long microsRollover() { //based on Rob Faludi's (rob.faludi.com) milli 
     readyToRoll = false; // we're no longer past halfway, reset!
   } 
   return microRollovers;
-}
-
-void handle_B(RF24NetworkHeader& header){
-  p_recv++;
-  unsigned long ref_time;
-  network.read(header,&ref_time,sizeof(ref_time));
-  //p("%010ld: Received 'B' from %05o -> %ldus round trip\n", millis(), header.from_node, micros()-ref_time);
-  Serial.print("Recebi ");
-  Serial.println(header.type);
-  if(header.type == 79){ digitalWrite(4,HIGH); }
-  else{digitalWrite(4,LOW);}
 }
